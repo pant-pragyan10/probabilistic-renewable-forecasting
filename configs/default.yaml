@@ -1,0 +1,63 @@
+# Single source of truth for the whole pipeline. Every script reads this file.
+seed: 42
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  results: results
+
+# GEFCom2014 solar and wind tracks. Files are fetched from the public repository that
+# accompanies Dumas et al. (Applied Energy, 2022); the dataset itself is the GEFCom2014 data
+# described in Hong et al. (Int. J. Forecasting, 2016). Cite both.
+data:
+  base_url: https://raw.githubusercontent.com/jonathandumas/generative-models/main/GEFcom2014/data
+  solar:
+    file: solar_new.csv
+    target: POWER
+    n_zones: 3
+    rows_per_zone: 19680
+    start: "2012-04-02 01:00:00"
+    end: "2014-07-01 00:00:00"
+    # Column names are ECMWF parameter codes. Names below follow the standard ECMWF code table and
+    # were checked against value ranges / correlations with POWER (see results/solar_variable_summary.csv).
+    rename:
+      VAR78: tclw      # total column liquid water
+      VAR79: tciw      # total column ice water
+      VAR134: sp       # surface pressure (Pa)
+      VAR157: rh       # relative humidity (%)
+      VAR164: tcc      # total cloud cover (0-1)
+      VAR165: u10      # 10 m wind, u component (m/s)
+      VAR166: v10      # 10 m wind, v component (m/s)
+      VAR167: t2m      # 2 m temperature (K)
+      VAR169: ssrd     # surface solar radiation downwards (W/m2)
+      VAR175: strd     # surface thermal radiation downwards (W/m2)
+      VAR178: tsr      # top net solar radiation (W/m2); zero when the sun is down
+      VAR228: tp       # total precipitation
+  wind:
+    file: wind.csv
+    target: TARGETVAR
+    n_zones: 10
+    rows_per_zone: 17520
+    start: "2012-01-02 00:00:00"
+    end: "2013-12-31 23:00:00"
+    rename:
+      U10: u10
+      V10: v10
+      U100: u100
+      V100: v100
+
+# Sun-up mask for solar: tsr (a weather FORECAST variable, so legal at issue time) above this.
+sun_up_threshold: 1.0
+
+# Quantile levels every model must output (5%, 10%, ..., 95%).
+quantiles: [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50,
+            0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95]
+
+# Chronological splits (half-open): train < train_end <= validation < val_end <= test.
+splits:
+  solar:
+    train_end: "2013-07-01"
+    val_end: "2014-01-01"
+  wind:
+    train_end: "2013-01-01"
+    val_end: "2013-07-01"

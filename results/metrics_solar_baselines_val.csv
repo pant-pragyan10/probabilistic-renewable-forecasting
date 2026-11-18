@@ -1,0 +1,5 @@
+track,model,eval,subset,n,crossing_rate_raw,pinball,crps_approx,median_mae,coverage_90,coverage_50,width_90,width_50,skill_vs_climatology
+solar,climatology,val,all_hours,13248,0.0,0.0265,0.05301,0.07396,0.87945,0.66055,0.25187,0.11656,0.0
+solar,climatology,val,daylight,7170,0.0,0.04896,0.09793,0.13663,0.83445,0.42999,0.46538,0.21537,0.0
+solar,quantile_regression,val,all_hours,13248,0.19484,0.01797,0.03594,0.04803,0.90912,0.69958,0.20659,0.08089,0.32194
+solar,quantile_regression,val,daylight,7170,0.19484,0.0332,0.0664,0.08873,0.88926,0.50209,0.38171,0.14946,0.322

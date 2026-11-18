@@ -1,0 +1,16 @@
+{
+  "downloaded_on": "2026-11-14",
+  "source": "https://raw.githubusercontent.com/jonathandumas/generative-models/main/GEFcom2014/data",
+  "files": {
+    "solar": {
+      "file": "solar_new.csv",
+      "bytes": 11135835,
+      "sha256": "c963eca1291e433b4c191ce181df69c51a12b12121db1d4566835c038a1e226b"
+    },
+    "wind": {
+      "file": "wind.csv",
+      "bytes": 22656258,
+      "sha256": "85abd967891efeb72283ca24cda95991ebc41f37c186a5d3acaead776708c00c"
+    }
+  }
+}

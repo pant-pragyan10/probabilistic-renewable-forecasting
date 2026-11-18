@@ -1,0 +1,59 @@
+{
+  "best": {
+    "params": {
+      "hidden": 128,
+      "dropout": 0.2,
+      "weight_decay": 0.0001
+    },
+    "val_pinball": 0.040458384964372616,
+    "best_epoch": 15,
+    "best_epochs_per_seed": [
+      15,
+      13,
+      12
+    ]
+  },
+  "all_trials": [
+    {
+      "params": {
+        "hidden": 128,
+        "dropout": 0.1,
+        "weight_decay": 0.0001
+      },
+      "val_pinball": 0.04058091446731853,
+      "best_epoch": 8
+    },
+    {
+      "params": {
+        "hidden": 128,
+        "dropout": 0.2,
+        "weight_decay": 0.0001
+      },
+      "val_pinball": 0.040458384964372616,
+      "best_epoch": 15,
+      "best_epochs_per_seed": [
+        15,
+        13,
+        12
+      ]
+    },
+    {
+      "params": {
+        "hidden": 256,
+        "dropout": 0.1,
+        "weight_decay": 0.0001
+      },
+      "val_pinball": 0.04087967213263827,
+      "best_epoch": 7
+    },
+    {
+      "params": {
+        "hidden": 256,
+        "dropout": 0.2,
+        "weight_decay": 0.0001
+      },
+      "val_pinball": 0.040932105919444996,
+      "best_epoch": 4
+    }
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "solar": {
+    "passed": true,
+    "checks": [
+      {
+        "check": "required columns present",
+        "passed": true,
+        "detail": "15 columns"
+      },
+      {
+        "check": "zone ids are 1..n_zones",
+        "passed": true,
+        "detail": "found [1, 2, 3]"
+      },
+      {
+        "check": "rows per zone as expected",
+        "passed": true,
+        "detail": "expected 19680, found {1: 19680, 2: 19680, 3: 19680}"
+      },
+      {
+        "check": "no missing values",
+        "passed": true,
+        "detail": "0 NaN"
+      },
+      {
+        "check": "all numeric values finite",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "check": "timestamps unique within each zone",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "check": "timestamps strictly hourly (no gaps) in each zone",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "check": "all zones cover the same time range",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "check": "date range as expected",
+        "passed": true,
+        "detail": "found 2012-04-02 01:00:00 -> 2014-07-01 00:00:00"
+      },
+      {
+        "check": "target within [0, 1.01]",
+        "passed": true,
+        "detail": "min=0.0000, max=1.00355"
+      }
+    ],
+    "stats": {
+      "rows": 59040,
+      "zones": 3,
+      "period": [
+        "2012-04-02 01:00:00",
+        "2014-07-01 00:00:00"
+      ],
+      "target_mean": 0.1838,
+      "share_target_exactly_zero": 0.4454,
+      "split_rows": {
+        "train": 32757,
+        "val": 13248,
+        "test": 13035
+      },
+      "share_sun_down": 0.4797
+    }
+  },
+  "wind": {
+    "passed": true,
+    "checks": [
+      {
+        "check": "required columns present",
+        "passed": true,
+        "detail": "7 columns"
+      },
+      {
+        "check": "zone ids are 1..n_zones",
+        "passed": true,
+        "detail": "found [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]"
+      },
+      {
+        "check": "rows per zone as expected",
+        "passed": true,
+        "detail": "expected 17520, found {1: 17520, 2: 17520, 3: 17520, 4: 17520, 5: 17520, 6: 17520, 7: 17520, 8: 17520, 9: 17520, 10: 17520}"
+      },
+      {
+        "check": "no missing values",
+        "passed": true,
+        "detail": "0 NaN"
+      },
+      {
+        "check": "all numeric values finite",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "check": "timestamps unique within each zone",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "check": "timestamps strictly hourly (no gaps) in each zone",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "check": "all zones cover the same time range",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "check": "date range as expected",
+        "passed": true,
+        "detail": "found 2012-01-02 00:00:00 -> 2013-12-31 23:00:00"
+      },
+      {
+        "check": "target within [0, 1.01]",
+        "passed": true,
+        "detail": "min=0.0000, max=1.00000"
+      }
+    ],
+    "stats": {
+      "rows": 175200,
+      "zones": 10,
+      "period": [
+        "2012-01-02 00:00:00",
+        "2013-12-31 23:00:00"
+      ],
+      "target_mean": 0.3586,
+      "share_target_exactly_zero": 0.0805,
+      "split_rows": {
+        "train": 87600,
+        "val": 43440,
+        "test": 44160
+      }
+    }
+  }
+}

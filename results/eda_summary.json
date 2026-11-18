@@ -1,0 +1,24 @@
+{
+  "solar": {
+    "share_sun_down": 0.4797,
+    "share_exact_zero_all_hours": 0.4454,
+    "share_exact_zero_sun_up": 0.0021,
+    "share_at_least_0.99_sun_up": 0.0001,
+    "corr_power_ssrd": 0.9076,
+    "split_rows": {
+      "train": 32757,
+      "val": 13248,
+      "test": 13035
+    }
+  },
+  "wind": {
+    "share_exact_zero": 0.0805,
+    "share_at_least_0.99": 0.0065,
+    "corr_power_ws100": 0.7642,
+    "split_rows": {
+      "train": 87600,
+      "val": 43440,
+      "test": 44160
+    }
+  }
+}

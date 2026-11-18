@@ -1,0 +1,9 @@
+track,model,eval,n_test_half,fixed_margin_coverage,fixed_margin_width,own_range_coverage,own_range_width,fixed_margin_width_equal_coverage,width_change_at_equal_coverage_pct
+solar,Climatology,val,4029,0.9481,0.7931,0.7764,0.4217,0.4171,1.0898
+solar,Quantile Regression,val,4029,0.9365,0.4846,0.9072,0.3667,0.3954,-7.2661
+solar,LightGBM,val,4029,0.9379,0.4058,0.8757,0.2588,0.277,-6.5709
+solar,Neural network,val,4029,0.9484,0.4201,0.9362,0.2607,0.3864,-32.528
+wind,Climatology,val,21720,0.8872,0.9297,0.9477,0.8899,1.1233,-20.7838
+wind,Quantile Regression,val,21720,0.9171,0.5644,0.9041,0.4852,0.5344,-9.1966
+wind,LightGBM,val,21720,0.9143,0.5231,0.8603,0.4095,0.4177,-1.971
+wind,Neural network,val,21720,0.9108,0.5201,0.9026,0.4153,0.5003,-16.9792

@@ -1,0 +1,3 @@
+track,model,eval,subset,n,crossing_rate_raw,pinball,crps_approx,median_mae,coverage_90,coverage_50,width_90,width_50,skill_vs_climatology
+wind,climatology,val,all_hours,43440,0.0,0.08086,0.16173,0.22645,0.9547,0.53897,0.88986,0.49975,0.0
+wind,quantile_regression,val,all_hours,43440,0.16144,0.04394,0.08788,0.11785,0.90009,0.51416,0.50007,0.19671,0.4566
