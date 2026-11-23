@@ -113,7 +113,7 @@ with t_fore:
 
 
 # ---- 1b. try your own inputs ----------------------------------------------------------------------------
-@st.cache_resource(show_spinner="Preparing the training data...")
+@st.cache_resource(show_spinner="Loading all models (the first time takes up to a minute)...")
 def whatif_resources(track_):
     from probfc.data import load_track
     from probfc.features import build_features, usable_rows
@@ -121,74 +121,180 @@ def whatif_resources(track_):
 
     t = build_features(load_track(track_, CFG), track_, CFG)
     t = t[usable_rows(t)].reset_index(drop=True)
-    train = t[split_masks(t["timestamp"], track_, CFG)["train"]]
+    train = t[split_masks(t["timestamp"], track_, CFG)["train"]].reset_index(drop=True)
     cols = [c for c in t.columns if c not in ("timestamp", "zone", "y", "sun_up")]
-    return train, cols, whatif.load_boosters(CFG, track_), sorted(t["zone"].unique())
+    return train, cols, whatif.load_models(CFG, track_, train, cols), sorted(t["zone"].unique())
+
+
+def ranges_chart(qs, title):
+    """One bar per model: light = 90% range, dark = 50% range, tick = median. `qs` maps model name -> 19 quantiles."""
+    names = [m for m in MODELS if m in qs]
+    fig, ax = plt.subplots(figsize=(6.6, 0.75 * len(names) + 1.2), layout="constrained")
+    for i, m in enumerate(names):
+        q = qs[m]
+        ax.barh(i, q[col(0.95)] - q[col(0.05)], left=q[col(0.05)], height=0.5, color=plots.SEQ_BLUE[0])
+        ax.barh(i, q[col(0.75)] - q[col(0.25)], left=q[col(0.25)], height=0.5, color=plots.SEQ_BLUE[2])
+        ax.plot([q[col(0.5)]] * 2, [i - 0.25, i + 0.25], color=plots.SEQ_BLUE[6], lw=2.5)
+    ax.set_yticks(range(len(names)))
+    ax.set_yticklabels([LABELS[m] for m in names])
+    ax.set_xlim(0, 1)
+    ax.set_xlabel("Power (fraction of installed capacity)")
+    ax.grid(axis="y", visible=False)
+    ax.invert_yaxis()
+    ax.set_title(title, fontsize=9.5)
+    return fig
+
+
+def quantile_table(qs):
+    d = {"Quantile": [f"{t:.0%}" for t in TAUS]}
+    for m in MODELS:
+        if m in qs:
+            d[LABELS[m]] = np.round(qs[m], 3)
+    return pd.DataFrame(d)
 
 
 with t_try:
-    st.subheader("Type in the weather, get a forecast range")
-    st.write("This uses the trained LightGBM model. You set the main inputs; everything else is filled with the typical value for that "
-             f"{track} zone, hour and time of year. The sidebar's energy source and zone apply here too.")
+    st.subheader("Give the models inputs, get a forecast range from every model")
+    st.write("Pick where the weather inputs come from. Every model (climatology, quantile regression, LightGBM, neural network) then "
+             f"produces a range for the {track} zone chosen in the sidebar. Inputs you do not set are filled with typical values for that zone, hour and season.")
     try:
-        train_w, cols_w, boosters_w, zones_w = whatif_resources(track)
+        train_w, cols_w, models_w, zones_w = whatif_resources(track)
     except Exception as e:
-        boosters_w = None
-        st.error(f"Could not prepare the model inputs: {e}")
-    if boosters_w is None:
-        st.info("Trained LightGBM models not found. Run `python scripts/04_lightgbm.py` first.")
-    else:
-        left, right = st.columns([1, 1.25])
-        with left:
-            day = st.date_input("Date (sets the time of year)", value=pd.Timestamp("2013-10-15").date(), key="wi_date")
-            hour = st.slider("Hour of day", 0, 23, 12, key="wi_hour")
-            doy = pd.Timestamp(day).dayofyear
-            typ = whatif.typical_rows(train_w, zone, hour, doy)
-            lag_default = float(np.clip(typ["y_lag24"].median(), 0, 1))
-            if track == "solar":
-                ssrd = st.slider("Forecast sunlight reaching the ground (W/m²)", 0, 1100, 600, key="wi_ssrd")
-                cloud = st.slider("Forecast cloud cover (%)", 0, 100, 30, key="wi_cloud") / 100
-                temp = st.slider("Forecast temperature (°C)", -5, 45, 22, key="wi_temp")
-                hum = st.slider("Forecast humidity (%)", 0, 100, 50, key="wi_hum")
-                lag = st.slider("Power at this hour yesterday (fraction of capacity)", 0.0, 1.0, round(lag_default, 2), 0.01, key=f"wi_lag_{track}_{zone}_{hour}")
-                row = whatif.solar_row(typ, cols_w, CFG, hour, doy, ssrd, cloud, temp, hum, lag)
-                sun_up = bool(row["tsr"] > CFG["sun_up_threshold"])
+        models_w = None
+        st.error(f"Could not prepare the models: {e}")
+    if models_w is not None:
+        if "neural_net" not in models_w:
+            st.info("Neural network weights not found, so it is left out here. Run `python scripts/09_export_nn.py` once to add it.")
+        if "lightgbm" not in models_w:
+            st.info("LightGBM models not found. Run `python scripts/04_lightgbm.py` to add them.")
+        mode = st.radio("Where do the weather inputs come from?", ["Fetch a live forecast", "Type my own inputs"], horizontal=True, key="wi_mode")
+        tomorrow = (pd.Timestamp.now().normalize() + pd.Timedelta(days=1)).date()
+        day = st.date_input("Date (any date; it sets the time of year, and for a live forecast the day that is fetched)", value=tomorrow,
+                            min_value=pd.Timestamp("2000-01-01").date(), max_value=pd.Timestamp("2100-12-31").date(), key="wi_date")
+        thr = CFG["sun_up_threshold"]
+
+        def clim_for(typ, sun_ok=True):
+            ref_y = typ["y"].to_numpy()
+            return np.quantile(ref_y, TAUS) if (sun_ok and len(ref_y)) else np.zeros(len(TAUS))
+
+        if mode == "Type my own inputs":
+            left, right = st.columns([1, 1.25])
+            with left:
+                hour = st.slider("Hour of day", 0, 23, 12, key="wi_hour")
+                doy = pd.Timestamp(day).dayofyear
+                typ = whatif.typical_rows(train_w, zone, hour, doy)
+                lag_default = float(np.clip(typ["y_lag24"].median(), 0, 1))
+                if track == "solar":
+                    ssrd = st.slider("Forecast sunlight reaching the ground (W/m²)", 0, 1100, 600, key="wi_ssrd")
+                    cloud = st.slider("Forecast cloud cover (%)", 0, 100, 30, key="wi_cloud") / 100
+                    temp = st.slider("Forecast temperature (°C)", -5, 45, 22, key="wi_temp")
+                    hum = st.slider("Forecast humidity (%)", 0, 100, 50, key="wi_hum")
+                    lag = st.slider("Power at this hour yesterday (fraction of capacity)", 0.0, 1.0, round(lag_default, 2), 0.01, key=f"wi_lag_{track}_{zone}_{hour}")
+                    row = whatif.solar_row(typ, cols_w, CFG, hour, doy, ssrd, cloud, temp, hum, lag)
+                    sun_up = bool(row["tsr"] > thr)
+                else:
+                    speed = st.slider("Forecast wind speed at 100 m (m/s)", 0.0, 25.0, 7.0, 0.5, key="wi_speed")
+                    direction = st.slider("Wind direction (degrees)", 0, 359, 180, key="wi_dir")
+                    lag = st.slider("Power at this hour yesterday (fraction of capacity)", 0.0, 1.0, round(lag_default, 2), 0.01, key=f"wi_lag_{track}_{zone}_{hour}")
+                    row = whatif.wind_row(typ, cols_w, CFG, hour, doy, speed, direction, lag)
+                    sun_up = None
+            qs = whatif.predict_all(models_w, [row], zone, zones_w, sun_up=None if sun_up is None else [sun_up])
+            qs = {m: v[0] for m, v in qs.items()}
+            qs["climatology"] = clim_for(typ, sun_up is not False)
+            with right:
+                if sun_up is False:
+                    st.warning("At this hour and time of year the sun is down at this site, so every forecast is zero.")
+                fig = ranges_chart(qs, "Forecast range: light = 90% likely, dark = 50% likely, line = median")
+                st.pyplot(fig)
+                plt.close(fig)
+                pick = qs.get(model, qs["climatology"])
+                st.markdown(f"**{LABELS.get(model, model)} says:** most likely about **{pick[col(0.5)]:.0%}** of capacity, and a 90% chance it ends up "
+                            f"between **{pick[col(0.05)]:.0%}** and **{pick[col(0.95)]:.0%}**. (Change the model in the sidebar.)")
+                st.caption("Climatology (top bar) uses no weather inputs at all: it is the spread you would have for this zone, hour and season. "
+                           "The gap between it and the other bars is what the weather inputs buy.")
+            with st.expander("All 19 quantiles, every model"):
+                st.dataframe(quantile_table(qs), hide_index=True)
+        else:
+            c1, c2, c3 = st.columns([1, 1, 1])
+            lat = c1.number_input("Latitude", -60.0, 70.0, 28.45, 0.05, key="wi_lat", help="Default is Greater Noida, India. Use any place on Earth.")
+            lon = c2.number_input("Longitude", -180.0, 180.0, 77.58, 0.05, key="wi_lon")
+            go = c3.button("Fetch forecast", type="primary", use_container_width=True)
+            if go:
+                from probfc.live import fetch_forecast
+                try:
+                    with st.spinner("Asking the weather service..."):
+                        st.session_state["live"] = {"df": fetch_forecast(lat, lon, day), "key": (round(lat, 3), round(lon, 3), str(day))}
+                except RuntimeError as e:
+                    st.session_state.pop("live", None)
+                    st.error(str(e))
+            live = st.session_state.get("live")
+            if not live or live["key"] != (round(lat, 3), round(lon, 3), str(day)):
+                st.info("Press **Fetch forecast** to download the hourly weather forecast for this place and date (free service, no sign-up). "
+                        "The app then turns it into a power range for every hour of the day.")
             else:
-                speed = st.slider("Forecast wind speed at 100 m (m/s)", 0.0, 25.0, 7.0, 0.5, key="wi_speed")
-                direction = st.slider("Wind direction (degrees)", 0, 359, 180, key="wi_dir")
-                lag = st.slider("Power at this hour yesterday (fraction of capacity)", 0.0, 1.0, round(lag_default, 2), 0.01, key=f"wi_lag_{track}_{zone}_{hour}")
-                row = whatif.wind_row(typ, cols_w, CFG, hour, doy, speed, direction, lag)
-                sun_up = None
-        q_model = whatif.predict(boosters_w, row, zone, zones_w, sun_up=sun_up)
-        ref_y = typ["y"].to_numpy()
-        q_clim = np.quantile(ref_y, TAUS) if (sun_up is not False and len(ref_y)) else np.zeros(len(TAUS))
-        with right:
-            if sun_up is False:
-                st.warning("At this hour and time of year the sun is down at this site, so the forecast is zero.")
-            fig, ax = plt.subplots(figsize=(6.4, 3.2), layout="constrained")
-            for y_pos, (label, q) in enumerate((("With your inputs\n(LightGBM)", q_model), ("No weather info\n(climatology)", q_clim))):
-                ax.barh(y_pos, q[col(0.95)] - q[col(0.05)], left=q[col(0.05)], height=0.5, color=plots.SEQ_BLUE[0])
-                ax.barh(y_pos, q[col(0.75)] - q[col(0.25)], left=q[col(0.25)], height=0.5, color=plots.SEQ_BLUE[2])
-                ax.plot([q[col(0.5)]] * 2, [y_pos - 0.25, y_pos + 0.25], color=plots.SEQ_BLUE[6], lw=2.5)
-            ax.set_yticks([0, 1])
-            ax.set_yticklabels(["With your inputs\n(LightGBM)", "No weather info\n(climatology)"])
-            ax.set_xlim(0, 1)
-            ax.set_xlabel("Power (fraction of installed capacity)")
-            ax.grid(axis="y", visible=False)
-            ax.invert_yaxis()
-            ax.set_title("Forecast range: light = 90% likely, dark = 50% likely, line = median", fontsize=9.5)
-            st.pyplot(fig)
-            plt.close(fig)
-            lo, med, hi = q_model[col(0.05)], q_model[col(0.5)], q_model[col(0.95)]
-            st.markdown(f"**Model says:** most likely about **{med:.0%}** of capacity, and a 90% chance it ends up between **{lo:.0%}** and **{hi:.0%}**.")
-            st.caption("The lower bar (climatology) shows the spread you would have without any weather forecast, using the same zone, hour and season. "
-                       "Compare the two bars to see how much the weather inputs narrow the range.")
-        with st.expander("All 19 quantiles"):
-            st.dataframe(pd.DataFrame({"Quantile": [f"{t:.0%}" for t in TAUS], "Forecast (fraction of capacity)": q_model.round(3),
-                                       "Climatology": q_clim.round(3)}), hide_index=True)
-        st.caption("Assumptions: the weather in the hours before and after is taken to be the same as the chosen hour. The model was trained on 2012-2014 "
-                   "data from these anonymous sites, so unusual combinations of inputs are outside what it has seen, and this is a demonstration of "
-                   "how the model responds, not a forecast for a real date.")
+                wx = live["df"]
+                doy = pd.Timestamp(day).dayofyear
+                d0 = pd.Timestamp(day).normalize()
+                rows, suns, clims = [], [], []
+                for h in range(24):
+                    ts = d0 + pd.Timedelta(hours=h)
+                    cur, prv, nxt = wx.loc[ts], wx.loc[ts - pd.Timedelta(hours=1)], wx.loc[ts + pd.Timedelta(hours=1)]
+                    typ = whatif.typical_rows(train_w, zone, h, doy)
+                    lag = float(np.clip(typ["y_lag24"].median(), 0, 1))
+                    if track == "solar":
+                        rows.append(whatif.solar_row(typ, cols_w, CFG, h, doy, cur["ssrd"], cur["cloud"], cur["temp_c"], cur["humidity"], lag,
+                                                     ssrd_prev=prv["ssrd"], ssrd_next=nxt["ssrd"], cloud_prev=prv["cloud"], cloud_next=nxt["cloud"], tsr=cur["tsr"]))
+                        suns.append(bool(cur["tsr"] > thr))
+                    else:
+                        rows.append(whatif.wind_row(typ, cols_w, CFG, h, doy, cur["speed100"], cur["dir_to"], lag,
+                                                    prev=(prv["speed100"], prv["dir_to"]), next=(nxt["speed100"], nxt["dir_to"])))
+                    clims.append(clim_for(typ, suns[-1] if track == "solar" else True))
+                day_q = whatif.predict_all(models_w, rows, zone, zones_w, sun_up=suns if track == "solar" else None)
+                day_q["climatology"] = np.array(clims)
+                pick_m = model if model in day_q else "climatology"
+                Qd = day_q[pick_m]
+                fig, ax = plt.subplots(figsize=(9, 3.6), layout="constrained")
+                hrs = np.arange(24)
+                if show90:
+                    ax.fill_between(hrs, Qd[:, col(0.05)], Qd[:, col(0.95)], color=plots.SEQ_BLUE[0], linewidth=0, label="90% range")
+                if show50:
+                    ax.fill_between(hrs, Qd[:, col(0.25)], Qd[:, col(0.75)], color=plots.SEQ_BLUE[2], linewidth=0, label="50% range")
+                ax.plot(hrs, Qd[:, col(0.5)], color=COLORS[pick_m], lw=2.2, label=f"Median ({LABELS[pick_m]})")
+                for m in MODELS:
+                    if m != pick_m and m in day_q:
+                        ax.plot(hrs, day_q[m][:, col(0.5)], color=COLORS[m], lw=1.1, ls="--", alpha=0.8, label=f"Median ({LABELS[m]})")
+                ax.set_xlim(0, 23)
+                ax.set_ylim(0, 1)
+                ax.set_xticks(range(0, 24, 3))
+                ax.set_xlabel(f"Hour of day (local time at the chosen place), {pd.Timestamp(day):%d %b %Y}")
+                ax.set_ylabel("Power (fraction of capacity)")
+                ax.set_title(f"{track.capitalize()}: forecast for the fetched day, shown for {LABELS[pick_m]} (pick the model in the sidebar)", fontsize=10)
+                ax.legend(loc="upper right", fontsize=8, ncol=2)
+                st.pyplot(fig)
+                plt.close(fig)
+                tb = pd.DataFrame({LABELS[m]: [day_q[m][:, col(0.5)].mean(), (day_q[m][:, col(0.95)] - day_q[m][:, col(0.05)]).mean()]
+                                   for m in MODELS if m in day_q}, index=["Average median power over the day", "Average width of the 90% range"])
+                st.dataframe(tb.style.format("{:.3f}"), use_container_width=True)
+                hsel = st.slider("Look at one hour in detail", 0, 23, 12, key="wi_live_hour")
+                cl, cr = st.columns([1.25, 1])
+                with cl:
+                    fig = ranges_chart({m: v[hsel] for m, v in day_q.items()}, f"All models, {hsel:02d}:00: light = 90%, dark = 50%, line = median")
+                    st.pyplot(fig)
+                    plt.close(fig)
+                with cr:
+                    w = wx.loc[d0 + pd.Timedelta(hours=hsel)]
+                    st.write("**Fetched inputs for this hour**")
+                    if track == "solar":
+                        st.write(f"Sunlight at the ground: {w['ssrd']:.0f} W/m²  \nCloud cover: {w['cloud']:.0%}  \nTemperature: {w['temp_c']:.1f} °C  \nHumidity: {w['humidity']:.0f}%")
+                    else:
+                        st.write(f"Wind speed at 100 m: {w['speed100']:.1f} m/s  \nWind blowing from: {w['dir_from']:.0f}°")
+                    st.caption("Yesterday's power is not available live, so the typical value for this zone, hour and season is used.")
+                with st.expander("Hourly table and all quantiles for the chosen model"):
+                    st.dataframe(pd.DataFrame(Qd, columns=[f"q{int(round(t * 100)):02d}" for t in TAUS], index=[f"{h:02d}:00" for h in range(24)]).round(3))
+            st.warning("Read this before quoting numbers: the models were trained on 2012-2014 data from anonymous sites, with ECMWF forecasts. A live "
+                       "forecast from another provider, for a place that is not one of those sites, is outside what they were tested on, so this shows "
+                       "the pipeline working on live inputs. It is not a validated forecast for that place. Yesterday's power cannot be fetched.")
+        st.caption("Assumptions when you type inputs: the weather in the hours before and after is taken to be the same as the chosen hour.")
 
 # ---- 2. compare models -----------------------------------------------------------------------
 with t_compare:

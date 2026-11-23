@@ -24,6 +24,7 @@ PLAIN = [
     ("evaluation", ["scripts/06_evaluate.py"]),
     ("SHAP", ["scripts/07_shap.py"]),
     ("margin comparison", ["scripts/08_usefulness.py"]),
+    ("export NN weights for the app", ["scripts/09_export_nn.py"]),
 ]
 FINAL = [
     ("baselines on test", ["scripts/03_baselines.py", "--tracks", "solar", "wind", "--final"]),

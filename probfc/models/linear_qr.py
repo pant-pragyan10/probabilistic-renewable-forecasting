@@ -39,5 +39,7 @@ class LinearQuantileRegression:
         zones = table["zone"].to_numpy()
         for z, (mu, sd, B) in self.coef_.items():
             idx = np.where(zones == z)[0]
+            if len(idx) == 0:          # no rows for this zone (e.g. a single-zone what-if)
+                continue
             out[idx] = self._x(table.iloc[idx], mu, sd) @ B.T
         return out

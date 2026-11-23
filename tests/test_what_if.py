@@ -48,3 +48,17 @@ def test_wind_more_wind_means_more_power():
     windy = predict(bo, wind_row(typ, cols, CFG, 12, 100, 12.0, 90, 0.2), 1, zones)
     assert np.all(np.diff(windy) >= 0)
     assert windy[9] > calm[9] + 0.3
+
+
+def test_predict_all_gives_every_model_and_valid_quantiles():
+    from probfc.whatif import load_models, predict_all, solar_row, typical_rows
+
+    train, cols, bo, zones = setup("solar")
+    models = load_models(CFG, "solar", train, cols)
+    assert {"lightgbm", "quantile_regression"} <= set(models)
+    rows = [solar_row(typical_rows(train, 1, h, 288), cols, CFG, h, 288, 700, 0.2, 22, 45, 0.5) for h in (11, 12)]
+    out = predict_all(models, rows, 1, zones, sun_up=[True, True])
+    for name, q in out.items():
+        assert q.shape == (2, 19) and np.all(np.diff(q, axis=1) >= 0) and q.min() >= 0 and q.max() <= 1, name
+    night = predict_all(models, rows, 1, zones, sun_up=[False, False])
+    assert all(q.max() == 0 for q in night.values())
