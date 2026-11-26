@@ -22,6 +22,20 @@ st.set_page_config(page_title="Probabilistic renewable forecasts", layout="wide"
 plots.set_style()
 CFG = load_config()
 TAUS = np.asarray(CFG["quantiles"])
+
+
+@st.cache_resource(show_spinner="Downloading the public GEFCom2014 data (first start only, a few seconds)...")
+def ensure_raw_data():
+    """The raw CSVs are not stored in the repository. On a fresh machine (e.g. Streamlit Community Cloud) fetch them once."""
+    from probfc.data import download_raw
+    download_raw(CFG)
+    return True
+
+
+try:
+    ensure_raw_data()
+except Exception as e:      # no internet, etc.: the app still opens; parts that need the raw data will say so
+    st.warning(f"Could not download the raw data automatically: {e}")
 RESULTS = resolve_path(CFG, "results")
 COLORS = {"quantile_regression": plots.BLUE, "lightgbm": plots.ORANGE, "neural_net": plots.AQUA, "climatology": plots.INK_2}
 
